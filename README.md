@@ -1,12 +1,12 @@
 # nohog
 
-Keeps Spotlight from indexing dev junk (`node_modules`, `target`, `Pods`, `venv`, …), so `mds_stores` stops eating CPU, without turning Spotlight off. Install once and it keeps itself up to date: new clones, new `npm install`s, plugged-in drives, macOS updates.
+**Every `npm install` hands Spotlight thousands of files you will never search for.** One web app's `node_modules` on my Mac held 104,031 of them, enough to keep a CPU core busy for about 25 minutes while `mds_stores` indexed it all. So I decided to solve it myself. nohog makes Spotlight skip dev junk (`node_modules`, `target`, `Pods`, `venv`, …) without turning search off. It keeps doing so as you clone, install and update macOS.
 
 ![nohog finding junk folders, then measuring Spotlight CPU with and without an exclusion](docs/demo.gif)
 
 <sub>Recorded with `vhs docs/demo.tape`, sped up 5×. The numbers are measured live.</sub>
 
-**Spotlight spends about 15 ms of CPU on every file `npm install` writes.** That sounds like nothing until you count the files. One web app's `node_modules` on the author's laptop holds 104,031 of them: **about 25 minutes of a CPU core** spent indexing code nobody will ever search. It happens again on every reinstall. With nohog it costs 0 seconds, and 0 files get indexed. ([How this was measured](#impact))
+**20,000 new `node_modules` files cost Spotlight 299 s of CPU** (one core flat out for about 5 minutes) and all of them got indexed. **Excluded, the same files cost 0 s, and none were indexed.** See [Impact](#impact) for the method and how to run it yourself.
 
 No sudo, no Full Disk Access. macOS 13 or later, Apple Silicon or Intel.
 
@@ -54,7 +54,7 @@ Measured with `nohog bench` on macOS 27.2 (26B123), Apple Silicon. Spotlight's b
 | Spotlight CPU for 20,000 new `node_modules` files | 298.7 s (282 s wall-clock) | 0.0 s |
 | Files that ended up in the index | 20,000 of 20,000 | 0 of 20,000 |
 
-That works out to 14 to 16 ms of Spotlight CPU per file across the runs, and it scales linearly. On the author's dev machine, `nohog status --count` reports **183,045 files in 9 folders** that nohog keeps out of the index. That includes a 104,031-file `node_modules` and a 53,849-file Go module cache. The headline's "about 25 minutes" is that `node_modules` times the measured 14 to 16 ms per file (24 to 28 minutes of one core). It is an extrapolation from the benchmark, not a separate measurement.
+That works out to 14 to 16 ms of Spotlight CPU per file across the runs, and it scales linearly. On my dev machine, `nohog status --count` reports **183,045 files in 9 folders** that nohog keeps out of the index. That includes a 104,031-file `node_modules` and a 53,849-file Go module cache. The headline's "about 25 minutes" is that `node_modules` times the measured 14 to 16 ms per file (24 to 28 minutes of one core). It is an extrapolation from the benchmark, not a separate measurement.
 
 **How `nohog bench` measures:**
 
