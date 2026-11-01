@@ -85,7 +85,8 @@ func isLoaded(_ label: String) -> Bool {
 let homebrewLabel = "homebrew.mxcl.nohog"
 
 func install(store: ExclusionStore) throws {
-    if Bundle.main.executablePath?.contains("/Cellar/") == true || isLoaded(homebrewLabel) {
+    // Resolve symlinks: Homebrew runs us as /opt/homebrew/bin/nohog -> ../Cellar/nohog/<v>/bin/nohog.
+    if Bundle.main.executablePath.map(canonicalPath)?.contains("/Cellar/") == true || isLoaded(homebrewLabel) {
         fail("installed with Homebrew: use `brew services start nohog` (it keeps the agent updated on upgrade)")
     }
     print("checking that Spotlight honors exclusions on this macOS (10-35s)…")

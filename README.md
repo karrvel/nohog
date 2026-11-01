@@ -10,6 +10,7 @@ No sudo, no Full Disk Access. macOS 13 or later, Apple Silicon or Intel.
 
 ```
 brew tap rohiitgit/nohog https://github.com/rohiitgit/nohog
+brew trust rohiitgit/nohog     # Homebrew 7+ only loads third-party taps you approve
 brew install nohog
 brew services start nohog
 ```

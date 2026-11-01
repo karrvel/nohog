@@ -1,7 +1,7 @@
 import Foundation
 import NohogCore
 
-let version = "0.1.0"
+let version = "0.1.1"
 
 let usage = """
 nohog \(version): keep Spotlight from indexing dev junk

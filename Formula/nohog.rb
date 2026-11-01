@@ -1,5 +1,6 @@
 # Homebrew formula, served straight from this repo (no separate tap repo needed):
 #   brew tap rohiitgit/nohog https://github.com/rohiitgit/nohog
+#   brew trust rohiitgit/nohog
 #   brew install nohog
 # Builds from source with the Command Line Tools, so no Apple Developer signing is involved.
 # On each release: update `url` and `sha256` (shasum -a 256 of the tag's .tar.gz).
