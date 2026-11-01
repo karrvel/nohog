@@ -7,8 +7,8 @@
 class Nohog < Formula
   desc "Keep Spotlight from indexing node_modules and other dev junk"
   homepage "https://github.com/rohiitgit/nohog"
-  url "https://github.com/rohiitgit/nohog/archive/refs/tags/v0.1.1.tar.gz"
-  sha256 "ebc17fa981f6b21fa44ba3bc0a76d2d96e362e122db629933db9a3453d3462eb"
+  url "https://github.com/rohiitgit/nohog/archive/refs/tags/v0.1.2.tar.gz"
+  sha256 "05ba887a28b1d363ac802346be4d824336ef332d2bf21ed09b9cbcb77a7f78af"
   license "MIT"
   head "https://github.com/rohiitgit/nohog.git", branch: "main"
 
