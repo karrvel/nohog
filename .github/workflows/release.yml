@@ -1,0 +1,21 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches version
+        run: |
+          version=$(sed -n 's/^let version = "\(.*\)"$/\1/p' Sources/nohog/main.swift)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+      - name: Build universal release (tests, universal binary, ad-hoc signed zip)
+        run: ./scripts/release.sh
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/nohog-macos.zip dist/nohog-macos.zip.sha256 --title "$GITHUB_REF_NAME" --generate-notes

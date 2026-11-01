@@ -1,0 +1,11 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test (warnings are errors)
+        run: swift test -Xswiftc -warnings-as-errors
+      - name: Universal release build
+        run: swift build -c release --arch arm64 --arch x86_64 -Xswiftc -warnings-as-errors
