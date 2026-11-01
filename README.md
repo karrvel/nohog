@@ -1,6 +1,6 @@
 # nohog
 
-**Every `npm install` hands Spotlight thousands of files you will never search for.** One web app's `node_modules` on my Mac held 104,031 of them, enough to keep a CPU core busy for about 25 minutes while `mds_stores` indexed it all. So I decided to solve it myself. nohog makes Spotlight skip dev junk (`node_modules`, `target`, `Pods`, `venv`, …) without turning search off. It keeps doing so as you clone, install and update macOS.
+Every `npm install` hands Spotlight thousands of files you will never search for. One web app's `node_modules` on my Mac held 104,031 of them, enough to keep a CPU core busy for about 25 minutes while `mds_stores` indexed it all. nohog makes Spotlight skip dev junk (`node_modules`, `target`, `Pods`, `venv`, …) without turning search off, and keeps doing so as you clone, install and update macOS.
 
 ![nohog finding junk folders, then measuring Spotlight CPU with and without an exclusion](docs/demo.gif)
 
