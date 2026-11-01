@@ -457,3 +457,67 @@ extension ReconcileTests {
         #expect(try State.load(from: url).lastOSBuild == "B")
     }
 }
+
+@Suite struct SelftestReportTests {
+    let pass = SelftestReport(macOS: "27.2", build: "26B123", chip: "Apple Silicon", nohogVersion: "0.1.2", result: .pass)
+
+    @Test func markdownRow() {
+        #expect(pass.markdownRow == "| 27.2 | 26B123 | Apple Silicon | ✅ pass | 0.1.2 |")
+        var failed = pass
+        failed.result = .fail("a file inside an excluded folder was indexed")
+        #expect(failed.markdownRow == "| 27.2 | 26B123 | Apple Silicon | ❌ fail | 0.1.2 |")
+    }
+
+    @Test func issueURLPrefillsTheForm() throws {
+        var failed = pass
+        failed.result = .fail("a file inside an excluded folder was indexed")
+        let url = failed.issueURL(repository: "owner/nohog")
+        let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        let fields = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+        #expect(url.absoluteString.hasPrefix("https://github.com/owner/nohog/issues/new?"))
+        #expect(fields["template"] == "selftest.yml")
+        #expect(fields["title"] == "Selftest: macOS 27.2 (26B123), Apple Silicon: fail")
+        #expect(fields["macos"] == "27.2" && fields["build"] == "26B123" && fields["result"] == "fail")
+        #expect(fields["details"] == "a file inside an excluded folder was indexed")
+        #expect(!url.absoluteString.contains(" ")) // spaces are encoded
+    }
+
+    @Test func inconclusiveIsNotShareable() {
+        var maybe = pass
+        maybe.result = .inconclusive("busy")
+        #expect(!maybe.isShareable)
+        #expect(pass.isShareable)
+    }
+}
+
+@Suite struct BenchTests {
+    @Test func parsesPsTimes() {
+        #expect(parseCPUTime("0:01.23") == 1.23)
+        #expect(parseCPUTime("61:02.50") == 3662.5)
+        #expect(parseCPUTime("1:02:03.45") == 3723.45)
+        #expect(parseCPUTime("2-00:00:01.00") == 172_801)
+        #expect(parseCPUTime("abc") == nil)
+    }
+
+    @Test func picksSpotlightProcessesFromPS() {
+        let ps = """
+          101   0:12.50 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Support/mds_stores
+          102   0:00.40 /System/Library/Frameworks/CoreServices.framework/Frameworks/Metadata.framework/Support/mdworker_shared
+          103   9:59.00 /Applications/Safari.app/Contents/MacOS/Safari
+          104   0:01.00 mds
+        """
+        #expect(spotlightCPU(fromPS: ps) == [101: 12.5, 102: 0.4, 104: 1.0])
+    }
+
+    @Test func meterCountsDeltasAndNewWorkers() {
+        var meter = CPUMeter(start: [1: 10, 2: 5])
+        meter.add([1: 12, 2: 5, 3: 0.5]) // worker 3 started during the window
+        meter.add([1: 13, 3: 1.5])       // worker 2 exited
+        #expect(meter.total == 3 + 0 + 1.5)
+    }
+
+    @Test func benchFilesCarryTheToken() {
+        #expect(benchFileContents(index: 7, token: "tok123").contains("tok123"))
+        #expect(benchFileContents(index: 7, token: "t") != benchFileContents(index: 8, token: "t"))
+    }
+}

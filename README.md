@@ -2,6 +2,12 @@
 
 Keeps Spotlight from indexing dev junk (`node_modules`, `target`, `Pods`, `venv`, …), so `mds_stores` stops eating CPU, without turning Spotlight off. Install once and it keeps itself up to date: new clones, new `npm install`s, plugged-in drives, macOS updates.
 
+![nohog finding junk folders, then measuring Spotlight CPU with and without an exclusion](docs/demo.gif)
+
+<sub>Recorded with `vhs docs/demo.tape`, sped up 5×. The numbers are measured live.</sub>
+
+**20,000 new `node_modules` files cost Spotlight 299 s of CPU** (one core flat out for about 5 minutes) and all of them got indexed. **Excluded, the same files cost 0 s, and none were indexed.** See [Impact](#impact) for the method and how to run it yourself.
+
 No sudo, no Full Disk Access. macOS 13 or later, Apple Silicon or Intel.
 
 ## Install
@@ -36,6 +42,43 @@ swift build -c release && .build/release/nohog install
 Before it starts anything, `install` runs a selftest that excludes a probe folder and checks that Spotlight really skips it. If your macOS doesn't honor exclusions, it refuses to install.
 
 If macOS asks whether nohog may access a removable volume (for code on an external drive), click **Allow**. Because builds are ad-hoc signed, macOS may ask again after an upgrade.
+
+## Impact
+
+Measured with `nohog bench` on macOS 27.2 (26B123), Apple Silicon. Spotlight's background activity was subtracted (0.7 to 1.9 s of CPU per minute during the runs).
+
+| | Without exclusion | Excluded |
+|---|---|---|
+| Spotlight CPU for 3,000 new `node_modules` files (the GIF) | 42.6 s | 0.0 s |
+| Spotlight CPU for 5,000 new `node_modules` files | 80.7 s | 0.0 s |
+| Spotlight CPU for 20,000 new `node_modules` files | 298.7 s (282 s wall-clock) | 0.0 s |
+| Files that ended up in the index | 20,000 of 20,000 | 0 of 20,000 |
+
+That works out to 14 to 16 ms of Spotlight CPU per file across the runs, and it scales linearly. On the author's dev machine, `nohog status --count` reports **183,045 files in 9 folders** that nohog keeps out of the index. That includes a 104,031-file `node_modules` and a 53,849-file Go module cache.
+
+**How `nohog bench` measures:**
+
+1. It records Spotlight's background CPU for 20 s.
+2. It writes N small JavaScript files (about 590 bytes each, with code and comment text) into a normal folder, then into an identical folder excluded exactly the way nohog excludes folders.
+3. After each write, it adds up the CPU time of `mds`, `mds_stores` and `mdworker_shared`, sampled with `ps` every second, until Spotlight has been quiet for 8 s.
+4. It counts how many of the files `mdfind` can find.
+
+**Caveats:**
+
+- **One machine.** Your numbers will differ; run `nohog bench` (about 2 to 6 minutes, cleans up after itself) and share them.
+- **Synthetic files.** Real packages vary in size and type.
+- **CPU a worker uses in the second before it exits is missed.** That makes both columns slightly low.
+- **Real use has a short gap.** The agent excludes a brand-new folder about 3 s after it appears, so the first few seconds of an `npm install` still get indexed. The benchmark excludes before writing.
+
+## Tested on
+
+The exclusion API is private, so a version is listed only when someone has run `nohog selftest` on it. The selftest proves that an excluded folder stays out of the index while a control folder gets indexed.
+
+| macOS | Build | Chip | Result | nohog |
+|---|---|---|---|---|
+| 27.2 | 26B123 | Apple Silicon | ✅ pass | 0.1.2 |
+
+**Help fill this in:** run `nohog selftest`. On a pass or a fail it prints a link that opens a pre-filled GitHub issue (macOS version, build, chip, result), plus the table row. Intel Macs and macOS 13 to 26 are especially wanted. The Intel build has only been run under Rosetta so far.
 
 ## How it decides what to exclude
 
@@ -87,10 +130,11 @@ Something that hogs Spotlight but isn't on this list? Run `sudo nohog top` to fi
 
 ```
 nohog install / uninstall              start the agent / stop it and remove every exclusion nohog added
-nohog status                           exclusions marked [nohog] or [yours], and whether the agent runs
+nohog status [--count]                 exclusions marked [nohog] or [yours] (with file counts), and whether the agent runs
 nohog scan [--count] [root...]         list junk folders (with file counts)
 nohog reconcile [--dry-run]            apply now / preview
-nohog selftest                         prove exclusions work on this macOS (10-35 s)
+nohog selftest                         prove exclusions work on this macOS (10-35 s); prints a shareable result
+nohog bench [files]                    measure Spotlight CPU with vs without an exclusion (default 20,000 files)
 sudo nohog top [seconds] [--depth N]   which folders Spotlight is reading right now
 nohog --version
 ```
@@ -119,7 +163,7 @@ Re-read on every reconcile, so there's no restart needed. Every field is optiona
 
 ## Limits
 
-- **It relies on a private API.** The selftest gates install and re-checks after every macOS update. So far it is verified on macOS 27.2 only; reports from other versions are welcome (`nohog selftest`).
+- **It relies on a private API.** The selftest gates install and re-checks after every macOS update. See [Tested on](#tested-on) for verified versions, and add yours.
 - **A brand-new `node_modules` is indexed for its first ~3 seconds** before it gets excluded.
 
 ## Development
@@ -127,6 +171,7 @@ Re-read on every reconcile, so there's no restart needed. Every field is optiona
 ```
 swift test -Xswiftc -warnings-as-errors
 ./scripts/release.sh     # universal zip in dist/; see the script header for signing and notarization
+vhs docs/demo.tape       # re-record the README GIF (brew install vhs; runs a live benchmark, ~3 min)
 ```
 
 The tests use an in-memory exclusion store, so they never touch your Spotlight settings. Running the tests needs Xcode (Command Line Tools ships no test frameworks). Building does not.

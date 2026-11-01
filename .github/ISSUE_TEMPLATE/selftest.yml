@@ -1,0 +1,47 @@
+name: Selftest result
+description: Share the output of `nohog selftest` so others know which macOS versions work.
+title: "Selftest: "
+labels: ["selftest"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! `nohog selftest` normally fills this in for you. Results are added to the "Tested on" table in the README.
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "27.2"
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: macOS build
+      placeholder: "26B123"
+    validations:
+      required: true
+  - type: input
+    id: chip
+    attributes:
+      label: Chip
+      placeholder: "Apple Silicon or Intel"
+    validations:
+      required: true
+  - type: input
+    id: result
+    attributes:
+      label: Result
+      placeholder: "pass or fail"
+    validations:
+      required: true
+  - type: input
+    id: nohog
+    attributes:
+      label: nohog version
+      placeholder: "0.1.2"
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: For a failure, the reason selftest printed, and anything unusual about your setup.

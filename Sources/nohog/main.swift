@@ -1,7 +1,8 @@
 import Foundation
 import NohogCore
 
-let version = "0.1.1"
+let version = "0.1.2"
+let repository = "rohiitgit/nohog"
 
 let usage = """
 nohog \(version): keep Spotlight from indexing dev junk
@@ -10,10 +11,11 @@ usage: nohog <command>
 
   install                    start the background agent (runs at login; no sudo needed)
   uninstall                  stop the agent and remove every exclusion nohog added
-  status                     Spotlight exclusions, marked [nohog] or [yours]
+  status [--count]           Spotlight exclusions, marked [nohog] or [yours] (with file counts)
   scan [--count] [root...]   list dev junk folders (default: configured roots)
   reconcile [--dry-run]      exclude junk folders now / show what would change
   selftest                   prove Spotlight honors exclusions on this macOS (~10-35s)
+  bench [files]              measure Spotlight CPU with vs without an exclusion (~2-4 min)
   top [seconds] [--depth N]  which folders Spotlight is reading right now (needs sudo)
   watch                      run the agent in the foreground (what launchd runs)
 
@@ -25,10 +27,13 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+/// Regular files below `path` (folders and symlinks are not counted).
 func fileCount(_ path: String) -> Int {
+    let enumerator = FileManager.default.enumerator(at: URL(fileURLWithPath: path), includingPropertiesForKeys: [.isRegularFileKey])
     var count = 0
-    let enumerator = FileManager.default.enumerator(atPath: path)
-    while enumerator?.nextObject() != nil { count += 1 }
+    while let url = enumerator?.nextObject() as? URL {
+        if (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true { count += 1 }
+    }
     return count
 }
 
@@ -46,14 +51,21 @@ func scan(_ args: [String], config: Config) {
     print(String(format: "%d folders in %d roots (%.1fs)", result.found.count, result.scannedRoots.count, elapsed))
 }
 
-func status(store: ExclusionStore, state: State) throws {
+func status(_ args: [String], store: ExclusionStore, state: State) throws {
+    let withCount = args.contains("--count")
     let managed = Set(state.managed)
     let current = try store.list()
     print("Spotlight exclusions (\(current.count)):")
+    var keptOut = 0
     for path in current.sorted() {
-        print("  \(managed.contains(path) ? "[nohog]" : "[yours]") \(path)")
+        let owner = managed.contains(path) ? "[nohog]" : "[yours]"
+        guard withCount else { print("  \(owner) \(path)"); continue }
+        let count = fileCount(path)
+        if managed.contains(path) { keptOut += count }
+        print(String(format: "  %@ %9d  %@", owner, count, path))
     }
     if current.isEmpty { print("  (none)") }
+    if withCount { print("nohog keeps \(keptOut) files out of Spotlight's index") }
     let loaded = Paths.agentLabels.first(where: isLoaded)
     print("agent: \(loaded.map { "running (\($0))" } ?? "not running (run `nohog install`)")")
 }
@@ -84,14 +96,27 @@ do {
     case "scan":
         scan(rest, config: try Config.load(from: Paths.config, home: Paths.home))
     case "status":
-        try status(store: try SpotlightExclusionStore(), state: try State.load(from: Paths.state))
+        try status(rest, store: try SpotlightExclusionStore(), state: try State.load(from: Paths.state))
     case "reconcile":
         try reconcileCommand(rest, config: try Config.load(from: Paths.config, home: Paths.home), store: try SpotlightExclusionStore())
     case "selftest":
         print("checking (up to ~35s)…")
         let result = selftest(store: try SpotlightExclusionStore())
         print(result.summary)
+        let report = SelftestReport(macOS: macOSVersion(), build: osBuild(), chip: chipName(), nohogVersion: version, result: result)
+        if report.isShareable {
+            print("""
+
+            Help others know whether nohog works on their Mac: share this result (opens a pre-filled issue):
+              \(report.issueURL(repository: repository).absoluteString)
+            README row: \(report.markdownRow)
+            """)
+        } else {
+            print("Spotlight was busy; run `nohog selftest` again in a few minutes.")
+        }
         if case .fail = result { exit(1) }
+    case "bench":
+        try bench(files: rest.first.flatMap(Int.init) ?? 20_000, store: try SpotlightExclusionStore())
     case "install":
         try install(store: try SpotlightExclusionStore()) // throws where the API is missing
     case "uninstall":

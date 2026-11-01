@@ -73,3 +73,53 @@ public func selftestIfNeeded(stateURL: URL, build: String, selftest: () -> Selft
     }
     return result
 }
+
+/// A shareable selftest result: one row of the README's "Tested on" table, plus a link that opens a
+/// pre-filled GitHub issue (issue-form fields are filled from query parameters with the same ids).
+public struct SelftestReport: Equatable, Sendable {
+    public var macOS: String
+    public var build: String
+    public var chip: String
+    public var nohogVersion: String
+    public var result: SelftestResult
+
+    public init(macOS: String, build: String, chip: String, nohogVersion: String, result: SelftestResult) {
+        self.macOS = macOS
+        self.build = build
+        self.chip = chip
+        self.nohogVersion = nohogVersion
+        self.result = result
+    }
+
+    public var outcome: String {
+        switch result {
+        case .pass: return "pass"
+        case .fail: return "fail"
+        case .inconclusive: return "inconclusive"
+        }
+    }
+
+    /// Inconclusive runs prove nothing either way, so they are not worth sharing.
+    public var isShareable: Bool { outcome != "inconclusive" }
+
+    public var markdownRow: String {
+        "| \(macOS) | \(build) | \(chip) | \(outcome == "pass" ? "✅ pass" : "❌ fail") | \(nohogVersion) |"
+    }
+
+    public func issueURL(repository: String) -> URL {
+        var components = URLComponents(string: "https://github.com/\(repository)/issues/new")!
+        var details = ""
+        if case .fail(let why) = result { details = why }
+        components.queryItems = [
+            URLQueryItem(name: "template", value: "selftest.yml"),
+            URLQueryItem(name: "title", value: "Selftest: macOS \(macOS) (\(build)), \(chip): \(outcome)"),
+            URLQueryItem(name: "macos", value: macOS),
+            URLQueryItem(name: "build", value: build),
+            URLQueryItem(name: "chip", value: chip),
+            URLQueryItem(name: "result", value: outcome),
+            URLQueryItem(name: "nohog", value: nohogVersion),
+            URLQueryItem(name: "details", value: details),
+        ]
+        return components.url!
+    }
+}

@@ -51,6 +51,20 @@ func notify(_ message: String) {
 
 // MARK: - selftest
 
+/// "27.2" or "26.4.1".
+func macOSVersion() -> String {
+    let v = ProcessInfo.processInfo.operatingSystemVersion
+    return v.patchVersion > 0 ? "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)" : "\(v.majorVersion).\(v.minorVersion)"
+}
+
+/// The hardware, not the slice we run as: Apple Silicon reports hw.optional.arm64 = 1 even under Rosetta.
+func chipName() -> String {
+    var arm64: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    let found = sysctlbyname("hw.optional.arm64", &arm64, &size, nil, 0) == 0
+    return found && arm64 == 1 ? "Apple Silicon" : "Intel"
+}
+
 func selftest(store: ExclusionStore) -> SelftestResult {
     runSelftest(store: store, parent: canonicalPath(Paths.home)) { token, dir in
         run("/usr/bin/mdfind", ["-onlyin", dir, token]).output.split(separator: "\n").map(String.init)
