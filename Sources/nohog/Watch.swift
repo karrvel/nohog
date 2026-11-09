@@ -14,6 +14,9 @@ final class Agent: @unchecked Sendable {
     private var watched: [String] = []
     private var timer: DispatchSourceTimer?
     private var pending = false
+    // Junk events gathered during the debounce; a mount or dropped-events flag forces a full scan.
+    private var dirty = Set<String>()
+    private var needsFullScan = false
     // Filter inputs for events, refreshed by every reconcile.
     private var ruleNames: Set<String> = []
     private var roots: [String] = []
@@ -53,14 +56,17 @@ final class Agent: @unchecked Sendable {
         exit(0)
     }
 
-    private func reconcileNow(reason: String) {
+    /// `only` limits the scan (and so any pruning) to those folders; nil scans every root.
+    private func reconcileNow(reason: String, only: [String]? = nil) {
         do {
             let config = try Config.load(from: Paths.config, home: Paths.home)
+            var scoped = config
+            if let only { scoped.roots = only }
             let state = try State.load(from: Paths.state)
-            let (outcome, next) = try reconcile(config: config, state: state, store: store, dryRun: false)
+            let (outcome, next) = try reconcile(config: scoped, state: state, store: store, dryRun: false)
             if next != state { try next.save(to: Paths.state) }
             ruleNames = Set(config.rules.map(\.name))
-            roots = outcome.scannedRoots
+            if only == nil { roots = outcome.scannedRoots }
             excluded = outcome.excluded
             watch(watchRoots(for: config.roots))
             report(outcome, reason: reason)
@@ -80,13 +86,16 @@ final class Agent: @unchecked Sendable {
 
     fileprivate func handle(paths: [String], flags: [UInt32]) {
         dispatchPrecondition(condition: .onQueue(queue))
-        let relevant = flags.contains { $0 & Self.triggerFlags != 0 }
-            || paths.contains { isJunkEvent($0, ruleNames: ruleNames, roots: roots, excluded: excluded) }
-        guard relevant, !pending else { return }
+        if flags.contains(where: { $0 & Self.triggerFlags != 0 }) { needsFullScan = true }
+        dirty.formUnion(paths.filter { isJunkEvent($0, ruleNames: ruleNames, roots: roots, excluded: excluded) })
+        guard needsFullScan || !dirty.isEmpty, !pending else { return }
         pending = true
         queue.asyncAfter(deadline: .now() + Self.debounce) { [unowned self] in
+            let only = needsFullScan ? nil : rescanRoots(for: Array(dirty), ruleNames: ruleNames, roots: roots)
             pending = false
-            reconcileNow(reason: "change")
+            dirty = []
+            needsFullScan = false
+            reconcileNow(reason: "change", only: only)
         }
     }
 

@@ -344,6 +344,33 @@ extension ReconcileTests {
         #expect(!isJunkEvent("/dev/app/node_modules/pkg/", ruleNames: rules, roots: roots, excluded: ["/dev/app/node_modules"]))
     }
 
+    @Test func rescanOnlyTheProjectsThatChanged() {
+        let roots = ["/dev", "/dev/nested-root"]
+        let paths = [
+            "/dev/app/node_modules/pkg/",               // → /dev/app
+            "/dev/app/packages/ui/node_modules/x/",     // nested in /dev/app, collapsed
+            "/dev/rust/target/debug/",                  // → /dev/rust
+            "/dev/nested-root/svc/node_modules/",       // longest matching root wins → /dev/nested-root/svc
+            "/dev/node_modules/",                       // junk right under the root → the root
+            "/elsewhere/node_modules/",                 // outside every root, ignored
+        ]
+        #expect(rescanRoots(for: paths, ruleNames: rules, roots: roots) == ["/dev"])
+        #expect(rescanRoots(for: Array(paths.dropLast(2)), ruleNames: rules, roots: roots)
+            == ["/dev/app", "/dev/nested-root/svc", "/dev/rust"])
+    }
+
+    @Test func rescanRootsSupportPruningOnlyWhatWasRescanned() throws {
+        let fx = try Fixture(["a/package.json", "a/node_modules/", "b/package.json"])
+        var config = Config.defaults(home: "/nonexistent")
+        config.extraPaths = []
+        config.roots = rescanRoots(for: [fx.path("a/node_modules/x")], ruleNames: rules, roots: [fx.root])
+        // b's node_modules is gone, but b was not rescanned, so its managed entry must survive.
+        let store = FakeStore([fx.path("b/node_modules")])
+        let (outcome, state) = try reconcile(config: config, state: State(managed: [fx.path("b/node_modules")]), store: store, dryRun: false)
+        #expect(outcome.plan == Plan(add: [fx.path("a/node_modules")], remove: []))
+        #expect(state.managed == [fx.path("a/node_modules"), fx.path("b/node_modules")])
+    }
+
     @Test func watchRootsUseLiteralPrefixAndDropNested() throws {
         let fx = try Fixture(["vols/A/Developer/", "home/"])
         try FileManager.default.createSymbolicLink(atPath: fx.path("home/Developer"), withDestinationPath: fx.path("vols/A/Developer"))

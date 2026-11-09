@@ -237,3 +237,23 @@ public func isJunkEvent(_ path: String, ruleNames: Set<String>, roots: [String],
           trimmed.split(separator: "/").contains(where: { ruleNames.contains(String($0)) }) else { return false }
     return !excluded.contains { isWithin(trimmed, $0) }
 }
+
+/// The folders a change-triggered reconcile has to rescan: for each event, the folder holding its
+/// first junk-named component (where that folder's sentinels live), nested results collapsed.
+/// Rescanning only these instead of every root keeps a busy `npm install` from costing a full scan
+/// per event batch.
+public func rescanRoots(for paths: [String], ruleNames: Set<String>, roots: [String]) -> [String] {
+    var dirs = Set<String>()
+    for path in paths {
+        let trimmed = path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
+        guard let root = roots.filter({ isWithin(trimmed, $0) }).max(by: { $0.count < $1.count }) else { continue }
+        var dir = root
+        for part in trimmed.dropFirst(root.count).split(separator: "/") {
+            if ruleNames.contains(String(part)) { break }
+            dir += "/" + part
+        }
+        dirs.insert(dir)
+    }
+    let sorted = dirs.sorted()
+    return sorted.filter { dir in !sorted.contains { $0 != dir && isWithin(dir, $0) } }
+}
